@@ -1,7 +1,18 @@
-Server runs on locahost:9000
-The proxy runs on locahost:8000
+# http-proxy-syscalls
 
-Doing a curl `locahost:8000` should give us response from `locahost:9000`
+This project showcases an HTTP proxy built using Go's [syscall](https://pkg.go.dev/syscall) package.
+
+There are 2 actors involved: **proxy** + **server**. Requests made to proxy are forwarded to server.
+
+The proxy replies to the client with the response gor from server `hello world!`.
+
+The proxy runs on `localhost:8000`.
+Server runs on `localhost:9000`.
+
+## Testing
+
+Make sure you're running both proxy and server.
+Doing a curl `locahost:8000` should give us the response from `locahost:9000`.
 
 ```shell
 ➜  ~ curl localhost:9000
