@@ -2,7 +2,7 @@
 
 This project showcases an HTTP proxy built using Go's [syscall](https://pkg.go.dev/syscall) package.
 
-There are 2 actors involved: **proxy** + **server**. Requests made to proxy are forwarded to server.
+There are 2 actors involved besides client: **proxy** + **server**. Requests made to proxy are forwarded to server.
 
 The proxy replies to the client with the response gor from server `hello world!`.
 
