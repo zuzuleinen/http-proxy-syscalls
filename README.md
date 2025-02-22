@@ -18,3 +18,8 @@ Doing a curl `locahost:8000` should give us the response from `locahost:9000`.
 ➜  ~ curl localhost:9000
 hello world!
 ```
+
+## Why don't you use net.http?
+
+The `https://pkg.go.dev/net/http` library is ignored on purpose, so I can learn more about network programming using
+internet sockets via raw system calls.
