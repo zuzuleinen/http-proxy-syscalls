@@ -6,11 +6,6 @@ import (
 )
 
 func main() {
-	// socket that listens to HTTP GET request on :8000
-	// once the GET request is received, we open a socket to connect with the server
-	// we do a GET request to the server
-	// we write the response from the server to the initial socket
-
 	// create the TCP socket
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
