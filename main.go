@@ -100,18 +100,14 @@ func respFromServer() (response []byte, err error) {
 
 	response = make([]byte, 4096)
 
-	for {
-		n, _, err := syscall.Recvfrom(fd, response, 0)
-		if err != nil {
-			return nil, fmt.Errorf("error receiving response %v", err)
-		}
-
-		if n == 0 {
-			continue
-		}
-
-		return response[:n], nil
+	n, _, err := syscall.Recvfrom(fd, response, 0)
+	if err != nil {
+		return nil, fmt.Errorf("error receiving response %v", err)
 	}
 
-	return nil, nil
+	if n == 0 {
+		return nil, nil
+	}
+
+	return response[:n], nil
 }
