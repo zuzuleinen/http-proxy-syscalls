@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"syscall"
 )
@@ -56,11 +57,16 @@ func main() {
 			break
 		}
 
+		dataToSend, err := respFromServer()
+		if err != nil {
+			log.Printf("error getting response from server: %v", err)
+			continue
+		}
+
 		if err := syscall.Sendto(conn, []byte("HTTP/1.1 200 ok\r\n\r\n"), 0, connAddr); err != nil {
 			log.Printf("error sending message to socket: %v", err)
 		}
 
-		dataToSend := []byte("hello world!\n") // todo fetch this from server
 		if err := syscall.Sendto(conn, dataToSend, 0, connAddr); err != nil {
 			log.Printf("error sending message to socket: %v", err)
 		}
@@ -70,4 +76,42 @@ func main() {
 			continue
 		}
 	}
+}
+
+func respFromServer() (response []byte, err error) {
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	if err != nil {
+		return nil, fmt.Errorf("error opening socket: %v", err)
+	}
+
+	to := &syscall.SockaddrInet4{
+		Port: 9000,
+		Addr: [4]byte{127, 0, 0, 1},
+	}
+
+	if err := syscall.Connect(fd, to); err != nil {
+		return nil, fmt.Errorf("could not connect: %v", err)
+	}
+
+	getREQ := []byte("GET / HTTP/1.1\r\nHost: localhost:9000\r\n")
+	if err := syscall.Sendto(fd, getREQ, 0, to); err != nil {
+		return nil, fmt.Errorf("error sending request to server: %v", err)
+	}
+
+	response = make([]byte, 4096)
+
+	for {
+		n, _, err := syscall.Recvfrom(fd, response, 0)
+		if err != nil {
+			return nil, fmt.Errorf("error receiving response %v", err)
+		}
+
+		if n == 0 {
+			continue
+		}
+
+		return response[:n], nil
+	}
+
+	return nil, nil
 }
