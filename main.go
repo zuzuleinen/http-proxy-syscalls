@@ -15,7 +15,7 @@ func main() {
 
 	// bind the socket to localhost:8000
 	portNumber := 8000
-	addr := &syscall.SockaddrInet4{
+	proxyAddr := &syscall.SockaddrInet4{
 		Port: portNumber,
 		Addr: [4]byte{0, 0, 0, 0},
 	}
@@ -26,8 +26,8 @@ func main() {
 		log.Fatalf("setsockopt SO_REUSEADDR failed: %v", err)
 	}
 
-	if err := syscall.Bind(fd, addr); err != nil {
-		log.Fatalf("error binding socket to addr: %v", err)
+	if err := syscall.Bind(fd, proxyAddr); err != nil {
+		log.Fatalf("error binding socket to proxyAddr: %v", err)
 	}
 
 	// listen for incoming connections
@@ -57,7 +57,7 @@ func main() {
 			break
 		}
 
-		dataToSend, err := respFromServer()
+		dataToSend, err := sendToUpstream(request[:n])
 		if err != nil {
 			log.Printf("error getting response from server: %v", err)
 			continue
@@ -78,36 +78,38 @@ func main() {
 	}
 }
 
-func respFromServer() (response []byte, err error) {
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+func sendToUpstream(data []byte) (upstreamResponse []byte, err error) {
+	upstreamSocket, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
 		return nil, fmt.Errorf("error opening socket: %v", err)
 	}
+	defer func() {
+		closeErr := syscall.Close(upstreamSocket)
+		if closeErr != nil {
+			err = closeErr
+		}
+	}()
 
-	to := &syscall.SockaddrInet4{
+	upstreamAddr := &syscall.SockaddrInet4{
 		Port: 9000,
 		Addr: [4]byte{127, 0, 0, 1},
 	}
 
-	if err := syscall.Connect(fd, to); err != nil {
+	if err := syscall.Connect(upstreamSocket, upstreamAddr); err != nil {
 		return nil, fmt.Errorf("could not connect: %v", err)
 	}
+	log.Println("connected to upstream")
 
-	getREQ := []byte("GET / HTTP/1.1\r\nHost: localhost:9000\r\n")
-	if err := syscall.Sendto(fd, getREQ, 0, to); err != nil {
-		return nil, fmt.Errorf("error sending request to server: %v", err)
-	}
-
-	response = make([]byte, 4096)
-
-	n, _, err := syscall.Recvfrom(fd, response, 0)
+	err = syscall.Sendto(upstreamSocket, data, 0, upstreamAddr)
 	if err != nil {
-		return nil, fmt.Errorf("error receiving response %v", err)
+		return nil, fmt.Errorf("error sending to upstream %v", err)
 	}
 
-	if n == 0 {
-		return nil, nil
+	upstreamResponse = make([]byte, 4096)
+	n, _, err := syscall.Recvfrom(upstreamSocket, upstreamResponse, 0)
+	if err != nil {
+		return nil, fmt.Errorf("error receiving from upstream: %v", err)
 	}
 
-	return response[:n], nil
+	return upstreamResponse[:n], nil
 }
