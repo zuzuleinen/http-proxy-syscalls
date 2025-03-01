@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"syscall"
@@ -39,7 +40,7 @@ func main() {
 
 	for {
 		// accept a connection on the socket
-		conn, connAddr, err := syscall.Accept(fd)
+		clientConn, connAddr, err := syscall.Accept(fd)
 		if err != nil {
 			log.Fatalf("error on accepting connection on the socket")
 		}
@@ -47,7 +48,7 @@ func main() {
 		log.Printf("new connection from port %#v\n", connAddr.(*syscall.SockaddrInet4).Port)
 
 		request := make([]byte, 4096)
-		n, _, err := syscall.Recvfrom(conn, request, 0)
+		n, _, err := syscall.Recvfrom(clientConn, request, 0)
 		if err != nil {
 			log.Printf("error on recvfrom: %v", err)
 			continue
@@ -57,28 +58,25 @@ func main() {
 			break
 		}
 
-		dataToSend, err := sendToUpstream(request[:n])
+		respFromUpstream, err := sendToUpstream(request[:n])
 		if err != nil {
+			syscall.Close(clientConn)
 			log.Printf("error getting response from server: %v", err)
 			continue
 		}
 
-		if err := syscall.Sendto(conn, []byte("HTTP/1.1 200 ok\r\n\r\n"), 0, connAddr); err != nil {
+		if err := syscall.Sendto(clientConn, respFromUpstream.Bytes(), 0, connAddr); err != nil {
 			log.Printf("error sending message to socket: %v", err)
 		}
 
-		if err := syscall.Sendto(conn, dataToSend, 0, connAddr); err != nil {
-			log.Printf("error sending message to socket: %v", err)
-		}
-
-		if err := syscall.Close(conn); err != nil {
+		if err := syscall.Close(clientConn); err != nil {
 			log.Printf("error closing connection: %v\n", err)
 			continue
 		}
 	}
 }
 
-func sendToUpstream(data []byte) (upstreamResponse []byte, err error) {
+func sendToUpstream(data []byte) (resp *bytes.Buffer, err error) {
 	upstreamSocket, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	if err != nil {
 		return nil, fmt.Errorf("error opening socket: %v", err)
@@ -105,11 +103,24 @@ func sendToUpstream(data []byte) (upstreamResponse []byte, err error) {
 		return nil, fmt.Errorf("error sending to upstream %v", err)
 	}
 
-	upstreamResponse = make([]byte, 4096)
-	n, _, err := syscall.Recvfrom(upstreamSocket, upstreamResponse, 0)
-	if err != nil {
-		return nil, fmt.Errorf("error receiving from upstream: %v", err)
+	bufSize := 4096
+	upstreamResponse := make([]byte, bufSize)
+	var fullResp bytes.Buffer
+
+	for {
+		n, _, err := syscall.Recvfrom(upstreamSocket, upstreamResponse, 0)
+		log.Println("received from upstream", n, err)
+		if err != nil {
+			log.Printf("error receving from upstream from: %v", err)
+			continue
+		}
+
+		fullResp.Write(upstreamResponse[:n])
+
+		if n < bufSize {
+			break
+		}
 	}
 
-	return upstreamResponse[:n], nil
+	return &fullResp, nil
 }
